@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import { connectDB } from "./lib/db.js";
 import authRoutes from "./routes/auth.route.js";
-import messageRoute from "./routes/message.route.js";
+import messageRoutes from "./routes/message.route.js";
 import cors from "cors";
 
 dotenv.config();        // so we can use env varibles from .env file
@@ -18,7 +18,7 @@ app.use(cors({
 const PORT = process.env.PORT;
 
 app.use("/api/auth", authRoutes);
-app.use("/message", messageRoute);
+app.use("/api/messages", messageRoutes);
 app.listen(PORT, () => {
     console.log(`Server is running on PORT ${PORT}`);
     connectDB();
