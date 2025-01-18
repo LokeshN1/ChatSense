@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
-// import { useAuthStore } from "../store/useAuthStore";
-import SidebarSkeleton from "../skeletons/SidebarSkeleton";
+import { useAuthStore } from "../store/useAuthStore";
+import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users } from "lucide-react";
 
 
 export const Sidebar = () => {
     const {getUsers, users, selectedUser, setSelectedUser, isUsersLoading} = useChatStore();
     const onlineUsers = [];
+
     useEffect(() => {
         getUsers();
     }, [getUsers]);
+
+    useEffect(() => {
+      console.log("Selected User after re-render:", selectedUser);
+  }, [selectedUser]);
+  
 
     if(isUsersLoading) {
         return <SidebarSkeleton/>
@@ -31,7 +37,12 @@ export const Sidebar = () => {
             {users.map((user) => (
               <button
                 key={user._id}
-                onClick={() => setSelectedUser(user)}
+                onClick={() => {
+                  console.log("User being set:", user);
+                  setSelectedUser(user);
+                  console.log("Seletecd User\t"+selectedUser);
+                }}
+                
                 className={`
                   w-full p-3 flex items-center gap-3
                   hover:bg-base-300 transition-colors

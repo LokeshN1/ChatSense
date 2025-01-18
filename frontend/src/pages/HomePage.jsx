@@ -1,5 +1,5 @@
 import { useChatStore } from "../store/useChatStore"
-import {ChatContainer} from "../components/ChatContainer"
+import { ChatContainer } from "../components/ChatContainer"
 import {NoChatSelected} from "../components/NoChatSelected"
 import {Sidebar} from "../components/Sidebar"
 

@@ -1,6 +1,6 @@
 import Message from '../models/message.model.js';
 import User from '../models/user.model.js';
-
+import cloudinary from "../lib/cloudinary.js"
 export const getUserForSidebar = async (req, res) => {
     try {
         const loggedInUserId = req.user._id;
@@ -17,23 +17,23 @@ export const getUserForSidebar = async (req, res) => {
 
 export const getMessages = async (req, res) => {
     try {
-        const {id:userToChatId} = req.user._id;
-        const myId = req.params.id;
-
-        const messages = await Message.find({
-            $or: [
-                {senderId: myId, receiverId: userToChatId},
-                {senderId: userToChatId, receiverId: myId}
-            ],
-        });
-
-        res.status(200).json(messages);
+      const { id: userToChatId } = req.params;
+      const myId = req.user._id;
+  
+      const messages = await Message.find({
+        $or: [
+          { senderId: myId, receiverId: userToChatId },
+          { senderId: userToChatId, receiverId: myId },
+        ],
+      });
+  
+      res.status(200).json(messages);
     } catch (error) {
-        console.log("Error in getMessages controller", error.message);
-        res.status(500).json({message: 'Internal server error'});
+      console.log("Error in getMessages controller: ", error.message);
+      res.status(500).json({ error: "Internal server error" });
     }
-}
-
+  };
+  
 export const sendMessage = async (req, res) => {
     try {
         const {text, image} = req.body;
