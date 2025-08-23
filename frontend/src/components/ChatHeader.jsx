@@ -1,10 +1,13 @@
-import { X } from "lucide-react";
+import { BrainCircuit, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
+import { useState } from "react";
+import AiModal from "./AiModel";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
+  const [showAiModal, setShowAiModal] = useState(false);
 
   return (
     <div className="p-2.5 border-b border-base-300">
@@ -26,11 +29,18 @@ const ChatHeader = () => {
           </div>
         </div>
 
-        {/* Close button */}
-        <button onClick={() => setSelectedUser(null)}>
-          <X />
-        </button>
+        <div className="flex items-center gap-2">
+            <button className="btn btn-sm btn-ghost" onClick={() => setShowAiModal(true)}>
+                <BrainCircuit className="size-5"/>
+                Ask AI
+            </button>
+            {/* Close button */}
+            <button onClick={() => setSelectedUser(null)}>
+                <X />
+            </button>
+        </div>
       </div>
+      {showAiModal && <AiModal closeModal={() => setShowAiModal(false)}/>}
     </div>
   );
 };
