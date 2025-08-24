@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --custom-primary: #65c3c8;
+  --custom-secondary: #ef9fbc;
+  --custom-accent: #eeaf3a;
+  --custom-neutral: #291334;
+  --custom-base-100: #faf7f5;
+  --custom-base-200: #efeae6;
+  --custom-base-300: #e7e2df;
+  --custom-info: #3abff8;
+  --custom-success: #36d399;
+  --custom-warning: #fbbd23;
+  --custom-error: #f87272;
+}

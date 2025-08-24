@@ -4,17 +4,46 @@ import cloudinary from "../lib/cloudinary.js"
 import { getReceiverSocketId, io } from '../lib/socket.js';
 
 export const getUserForSidebar = async (req, res) => {
-    try {
-        const loggedInUserId = req.user._id;
+  try {
+    const loggedInUserId = req.user._id;
 
-    // filter out the logged in user from the list of users means return all user except the logged in user(current user)
-        const filteredUser = await User.find({_id: {$ne: loggedInUserId}}).select("-password"); // select("-password") means don't select password field from user
-     
-        res.status(200).json(filteredUser);
-    } catch (error) {
-        console.log("Error in getUserForSidebar controller", error.message);
-        res.status(500).json({message: 'Internal server error'});
-    }
+    // Get all users except the logged-in one
+    const allUsers = await User.find({
+      _id: { $ne: loggedInUserId },
+    }).select("-password");
+
+    // For each user, find the last message exchanged with the logged-in user
+    const usersWithLastMessage = await Promise.all(
+      allUsers.map(async (user) => {
+        const lastMessage = await Message.findOne({
+          $or: [
+            { senderId: loggedInUserId, receiverId: user._id },
+            { senderId: user._id, receiverId: loggedInUserId },
+          ],
+        }).sort({ createdAt: -1 });
+
+        return {
+          ...user.toObject(),
+          lastMessageTimestamp: lastMessage ? lastMessage.createdAt : null,
+        };
+      })
+    );
+
+    // Sort users: those with recent messages first, then those without messages
+    usersWithLastMessage.sort((a, b) => {
+      if (a.lastMessageTimestamp && b.lastMessageTimestamp) {
+        return b.lastMessageTimestamp - a.lastMessageTimestamp;
+      }
+      if (a.lastMessageTimestamp) return -1;
+      if (b.lastMessageTimestamp) return 1;
+      return 0;
+    });
+
+    res.status(200).json(usersWithLastMessage);
+  } catch (error) {
+    console.log("Error in getUserForSidebar controller", error.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
 };
 
 export const getMessages = async (req, res) => {

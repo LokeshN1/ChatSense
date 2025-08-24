@@ -7,70 +7,84 @@ import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
 
 export const ChatContainer = () => {
-  const {messages, getMessages, isMessagesLoading, selectedUser, unsubscribeFromMessages,
-     subscribeToMessages} = useChatStore();
+  const {
+    messages,
+    getMessages,
+    isMessagesLoading,
+    selectedUser,
+    unsubscribeFromMessages,
+    subscribeToMessages,
+  } = useChatStore();
 
-    
-  const {authUser} = useAuthStore();
-  const messageEndRef = useRef(); // so when new message comes chat container scroll down to that new message
+  const { authUser } = useAuthStore();
+  const messageEndRef = useRef();
 
-
-
-  useEffect(()=>{
+  useEffect(() => {
     getMessages(selectedUser._id);
     subscribeToMessages();
 
     return () => unsubscribeFromMessages();
-  },[selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  }, [
+    selectedUser._id,
+    getMessages,
+    subscribeToMessages,
+    unsubscribeFromMessages,
+  ]);
 
-  useEffect(()=>{
-    if(messageEndRef.current && messages){
-      messageEndRef.current.scrollIntoView({behavior : "smooth"});
+  useEffect(() => {
+    if (messageEndRef.current && messages) {
+      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  })
+  });
 
-  if(isMessagesLoading) {
-    return(
-      <div className="flex-1 flex flex-col overflow-auto">
-        <ChatHeader/>
-        <MessageSkeleton/>
-        <MessageInput/>
+  if (isMessagesLoading) {
+    return (
+      <div className='flex-1 flex flex-col overflow-auto'>
+        <ChatHeader />
+        <MessageSkeleton />
+        <MessageInput />
       </div>
-    )
-}
-return (
-  <div className="flex-1 flex flex-col overflow-auto">
-    <ChatHeader />
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    );
+  }
+  return (
+    <div className='flex-1 flex flex-col overflow-auto bg-base-200'>
+      <ChatHeader />
+      <div className='flex-1 overflow-y-auto p-4 space-y-4'>
         {messages.map((message) => (
           <div
             key={message._id}
-            className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"}`}
-            ref = {messageEndRef}
+            className={`chat ${
+              message.senderId === authUser._id ? "chat-end" : "chat-start"
+            }`}
+            ref={messageEndRef}
           >
-            <div className=" chat-image avatar">
-              <div className="size-10 rounded-full border">
+            <div className=' chat-image avatar'>
+              <div className='w-10 rounded-full border border-base-300'>
                 <img
                   src={
                     message.senderId === authUser._id
                       ? authUser.profilePic || "/avatar.png"
                       : selectedUser.profilePic || "/avatar.png"
                   }
-                  alt="profile pic"
+                  alt='profile pic'
                 />
               </div>
             </div>
-            <div className="chat-header mb-1">
-              <time className="text-xs opacity-50 ml-1">
+            <div className='chat-header mb-1'>
+              <time className='text-xs opacity-50 ml-1'>
                 {formatMessageTime(message.createdAt)}
               </time>
             </div>
-            <div className="chat-bubble flex flex-col">
+            <div
+              className={`chat-bubble flex flex-col ${
+                message.senderId === authUser._id ? "chat-bubble-primary" : ""
+              }`}
+            >
               {message.image && (
                 <img
                   src={message.image}
-                  alt="Attachment"
-                  className="sm:max-w-[200px] rounded-md mb-2"
+                  alt='Attachment'
+                  className='sm:max-w-[200px] rounded-md mb-2'
                 />
               )}
               {message.text && <p>{message.text}</p>}
@@ -78,11 +92,7 @@ return (
           </div>
         ))}
       </div>
-    <MessageInput />
-  </div>
-);
-
+      <MessageInput />
+    </div>
+  );
 };
-
-
-

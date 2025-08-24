@@ -65,18 +65,19 @@ export const useChatStore = create((set, get) => ({
       }
     },
 
-    // --- UPDATED LOGIC ---
     setSelectedUser: (user) => {
       const { selectedUser: currentSelectedUser } = get();
 
-      // If the clicked user is already selected, do nothing.
       if (currentSelectedUser?._id === user?._id) {
         return;
       }
 
-      // If it's a new user, set them and clear previous AI suggestions.
       set({ selectedUser: user });
-      const { clearFollowUpSuggestions, clearReplySuggestions, clearRefinedMessages } = useAiStore.getState();
+      const {
+        clearFollowUpSuggestions,
+        clearReplySuggestions,
+        clearRefinedMessages,
+      } = useAiStore.getState();
       clearFollowUpSuggestions();
       clearReplySuggestions();
       clearRefinedMessages();
