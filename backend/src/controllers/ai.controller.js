@@ -259,3 +259,212 @@ export const queryPersonChatWithThirdParty = async (req, res) => {
 };
 
 
+// --- Feature 1: Generate Follow-Up Suggestions ---
+export const generateFollowUp = async (req, res) => {
+    try {
+
+        const { currentUserId, otherPersonId } = req.body;
+        if (!currentUserId || !otherPersonId) {
+            return res.status(400).json({ error: 'currentUserId and otherPersonId are required' });
+        }
+
+        // --- Fetch Data ---
+        const [userA, userB] = await Promise.all([
+            User.findById(currentUserId),
+            User.findById(otherPersonId)
+        ]);
+        if (!userA || !userB) return res.status(404).json({ error: 'One or both users not found' });
+
+        const userIdToName = {
+            [userA._id.toString()]: userA.fullName,
+            [userB._id.toString()]: userB.fullName
+        };
+
+        const messages = await Message.find({
+            $or: [
+                { senderId: currentUserId, receiverId: otherPersonId },
+                { senderId: otherPersonId, receiverId: currentUserId }
+            ],
+        }).sort({ createdAt: -1 }).limit(20); // Get recent messages for context
+
+        const chatHistoryForPrompt = formatChatForAI(messages.reverse(), userIdToName);
+
+        // --- AI Call ---
+        config();
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+        const prompt = `
+            You are a creative conversation assistant. Your goal is to help a user continue a conversation with someone else.
+            The user, "${userA.fullName}", is talking to "${userB.fullName}".
+
+            Based on their recent chat history, suggest three engaging and relevant follow-up messages or questions that "${userA.fullName}" can send to continue the conversation.
+            If there is no chat history, suggest three interesting conversation starters.
+            The tone should be casual and friendly.
+
+            Chat History:
+            ---
+            ${chatHistoryForPrompt}
+            ---
+
+            Return your suggestions as a single, valid JSON object with a single key "suggestions" which is an array of three strings. Do not include any text or markdown formatting before or after the JSON object.
+            Example format:
+            {
+              "suggestions": [
+                "That sounds interesting! Tell me more about it.",
+                "Speaking of that, have you ever tried...?",
+                "What are you up to this weekend?"
+              ]
+            }
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
+        const suggestions = JSON.parse(cleanedJsonString);
+
+        console.log(":--------Follow-Up Suggestions--------:\n", suggestions);
+        // const suggestions = {
+        //       "suggestions": [
+        //         "That sounds interesting! Tell me more about it.",
+        //         "Speaking of that, have you ever tried...?",
+        //         "What are you up to this weekendHey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.?"
+        //       ]
+        //     };
+
+        res.json(suggestions);
+
+    } catch (error) {
+        console.error('generateFollowUp error:', error);
+        res.status(500).json({ error: 'Failed to generate follow-up suggestions', details: error.message });
+    }
+};
+
+
+// --- Feature 2: Generate Reply Suggestions ---
+export const generateReply = async (req, res) => {
+    try {
+        const { currentUserId, otherPersonId } = req.body;
+        if (!currentUserId || !otherPersonId) {
+            return res.status(400).json({ error: 'currentUserId and otherPersonId are required' });
+        }
+
+
+        // --- Fetch Data ---
+        const [userA, userB] = await Promise.all([
+            User.findById(currentUserId),
+            User.findById(otherPersonId)
+        ]);
+        if (!userA || !userB) return res.status(404).json({ error: 'One or both users not found' });
+        
+        const userIdToName = {
+            [userA._id.toString()]: userA.fullName,
+            [userB._id.toString()]: userB.fullName
+        };
+
+        const messages = await Message.find({
+            $or: [
+                { senderId: currentUserId, receiverId: otherPersonId },
+                { senderId: otherPersonId, receiverId: currentUserId }
+            ],
+        }).sort({ createdAt: -1 }).limit(10); // Context is key, get recent messages
+
+        if (messages.length === 0 || messages[0].senderId.toString() === currentUserId) {
+            return res.status(400).json({ error: 'There is no message from the other person to reply to.' });
+        }
+
+        const lastMessage = messages[0].text;
+        const chatHistoryForPrompt = formatChatForAI(messages.reverse(), userIdToName);
+
+        // --- AI Call ---
+        config();
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+        const prompt = `
+            You are a helpful chat assistant. Your task is to help a user, "${userA.fullName}", reply to a message from "${userB.fullName}".
+            The last message from "${userB.fullName}" was: "${lastMessage}"
+
+            Considering the recent chat history, generate three different reply options for "${userA.fullName}". The replies should be natural, concise, and appropriate for the context.
+
+            Recent Chat History:
+            ---
+            ${chatHistoryForPrompt}
+            ---
+
+            Return your suggestions as a single, valid JSON object with a single key "replies" which is an array of three strings. Do not include any text or markdown formatting before or after the JSON object.
+            Example format:
+            {
+              "replies": [
+                "I agree!",
+                "That's a good point, I hadn't thought of that.",
+                "Haha, that's hilarious!"
+              ]
+            }
+        `;
+        
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
+        const replies = JSON.parse(cleanedJsonString);
+
+        console.log(":--------Replies Suggestions--------:\n", replies);
+        // const replies = {
+        //       "replies": [
+        //         "I agree!Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.",
+        //         "That's a good point, I hadn't thought of that.",
+        //         "Haha, that's hilarious!"
+        //       ]
+        //     };
+        res.json(replies);
+
+    } catch (error) {
+        console.error('generateReply error:', error);
+        res.status(500).json({ error: 'Failed to generate reply suggestions', details: error.message });
+    }
+};
+
+
+// --- Feature 3: Refine User's Message ---
+export const refineMessage = async (req, res) => {
+    try {
+        const { userDraft, tone } = req.body; // tone can be 'casual', 'professional', 'friendly', 'humorous', etc.
+        if (!userDraft) {
+            return res.status(400).json({ error: 'userDraft is required' });
+        }
+
+        // --- AI Call ---
+        config();
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+        const prompt = `
+            You are an expert writing assistant. A user wants to send a message but needs help phrasing it.
+            Their rough draft is: "${userDraft}"
+
+            Your task is to refine this draft and provide three alternative versions.
+            The tone should be ${tone || 'clear and friendly'}. The message should be well-written, natural, and achieve the user's likely goal.
+
+            Return your suggestions as a single, valid JSON object with a single key "refined_messages" which is an array of three strings. Do not include any text or markdown formatting before or after the JSON object.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
+        const refinedMessages = JSON.parse(cleanedJsonString);
+        console.log(":--------Refined Messages--------:\n", refinedMessages);
+        // const refinedMessages = {
+        //       "refined_messages": [
+        //         "Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.Hey! Just wanted to check in and see how you're doing.",
+        //         "Hi there! Hope everything's going well with you.",
+        //         "Hello! It's been a while, how have you been?"
+        //       ]
+        //     };
+            
+        res.json(refinedMessages);
+
+    } catch (error) {
+        console.error('refineMessage error:', error);
+        res.status(500).json({ error: 'Failed to refine the message', details: error.message });
+    }
+};

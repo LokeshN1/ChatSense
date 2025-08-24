@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useAiStore } from "../store/useAiStore";
 import { useChatStore } from "../store/useChatStore";
 import { Loader, MessageSquare, Tag, Calendar, MapPin, Users, DollarSign, Briefcase, Sparkles, HelpCircle, CheckCircle, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 
 const AiModal = ({ closeModal }) => {
+    // AI-related state and functions from useAiStore
     const {
-        summarizeChat,
+        analyzeChat,
         isSummarizing,
         summary,
         queryChat,
@@ -12,17 +14,30 @@ const AiModal = ({ closeModal }) => {
         queryResult,
         clearSummary,
         clearQueryResult,
+    } = useAiStore();
+
+    // Chat-related state from useChatStore
+    const {
         selectedUser,
         authUser,
     } = useChatStore();
+
     const [query, setQuery] = useState("");
     const [activeTab, setActiveTab] = useState("summary");
     const [expandedSections, setExpandedSections] = useState({});
+    const [lastAskedQuestion, setLastAskedQuestion] = useState("");
+
+    const handleSummarizeChat = () => {
+        if (selectedUser?._id) {
+            analyzeChat(selectedUser._id);
+        }
+    };
 
     const handleQuerySubmit = (e) => {
         e.preventDefault();
-        if (query.trim()) {
-            queryChat(query);
+        if (query.trim() && selectedUser?._id) {
+            setLastAskedQuestion(query);
+            queryChat(selectedUser._id, query);
             setQuery("");
         }
     };
@@ -313,7 +328,7 @@ const AiModal = ({ closeModal }) => {
                     {/* Summary Tab */}
                     {activeTab === 'summary' && (
                         <div className="space-y-4">
-                            <button onClick={summarizeChat} className="btn btn-primary w-full" disabled={isSummarizing}>
+                            <button onClick={handleSummarizeChat} className="btn btn-primary w-full" disabled={isSummarizing}>
                                 {isSummarizing ? <><Loader className="animate-spin" /> Summarizing...</> : "Generate Chat Summary"}
                             </button>
                             
@@ -486,7 +501,6 @@ const AiModal = ({ closeModal }) => {
                                     )}
                                 </div>
                             )}
-
                         </div>
                     )}
                 </div>
