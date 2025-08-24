@@ -18,7 +18,7 @@ dotenv.config();        // so we can use env varibles from .env file
 app.use(express.json()); // so we can parse json data from request body
 app.use(cookieParser()); // so we can parse cookies from request headers
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_URL,
     credentials: true,
 }));
 
