@@ -1,6 +1,7 @@
 import Message from '../models/message.model.js';
 import User from '../models/user.model.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import axios from 'axios';
 import {config} from 'dotenv';
 
 
@@ -62,7 +63,7 @@ export const analyzePersonChatWithThirdParty = async (req, res) => {
       }
 
       const genAI = new GoogleGenerativeAI(geminiApiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
       const chatHistoryForPrompt = formatChatForAI(messages, userIdToName);
 
       const prompt = `
@@ -99,7 +100,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
         }
       `;
 
-      const result = await model.generateContent(prompt);
+      const result = await generateWithFallback(genAI, geminiApiKey, "gemini-1.5-flash-001", prompt);
       const response = result.response;
       const aiResponseText = response.text();
       console.log('AI Response:', aiResponseText);
@@ -205,7 +206,6 @@ export const queryPersonChatWithThirdParty = async (req, res) => {
       }
 
       const genAI = new GoogleGenerativeAI(geminiApiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
       const chatHistoryForPrompt = formatChatForAI(messages, userIdToName);
 
@@ -227,7 +227,7 @@ export const queryPersonChatWithThirdParty = async (req, res) => {
         }
       `;
 
-      const result = await model.generateContent(prompt);
+      const result = await generateWithFallback(genAI, geminiApiKey, "gemini-1.5-flash-001", prompt);
       const response = result.response;
       const aiResponseText = response.text();
       
@@ -291,8 +291,9 @@ export const generateFollowUp = async (req, res) => {
 
         // --- AI Call ---
         config();
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+        const geminiApiKey = process.env.GEMINI_API_KEY;
+        if (!geminiApiKey) throw new Error('GEMINI_API_KEY environment variable not set.');
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
 
         const prompt = `
             You are a creative conversation assistant. Your goal is to help a user continue a conversation with someone else.
@@ -318,7 +319,7 @@ export const generateFollowUp = async (req, res) => {
             }
         `;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateWithFallback(genAI, geminiApiKey, "gemini-1.5-flash-001", prompt);
         const response = result.response;
         const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
         const suggestions = JSON.parse(cleanedJsonString);
@@ -378,8 +379,9 @@ export const generateReply = async (req, res) => {
 
         // --- AI Call ---
         config();
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+        const geminiApiKey = process.env.GEMINI_API_KEY;
+        if (!geminiApiKey) throw new Error('GEMINI_API_KEY environment variable not set.');
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
 
         const prompt = `
             You are a helpful chat assistant. Your task is to help a user, "${userA.fullName}", reply to a message from "${userB.fullName}".
@@ -403,7 +405,7 @@ export const generateReply = async (req, res) => {
             }
         `;
         
-        const result = await model.generateContent(prompt);
+        const result = await generateWithFallback(genAI, geminiApiKey, "gemini-1.5-flash-001", prompt);
         const response = result.response;
         const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
         const replies = JSON.parse(cleanedJsonString);
@@ -435,8 +437,9 @@ export const refineMessage = async (req, res) => {
 
         // --- AI Call ---
         config();
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+        const geminiApiKey2 = process.env.GEMINI_API_KEY;
+        if (!geminiApiKey2) throw new Error('GEMINI_API_KEY environment variable not set.');
+        const genAI2 = new GoogleGenerativeAI(geminiApiKey2);
 
         const prompt = `
             You are an expert writing assistant. A user wants to send a message but needs help phrasing it.
@@ -448,7 +451,7 @@ export const refineMessage = async (req, res) => {
             Return your suggestions as a single, valid JSON object with a single key "refined_messages" which is an array of three strings. Do not include any text or markdown formatting before or after the JSON object.
         `;
 
-        const result = await model.generateContent(prompt);
+        const result = await generateWithFallback(genAI2, geminiApiKey2, "gemini-1.5-flash-001", prompt);
         const response = result.response;
         const cleanedJsonString = response.text().replace(/```json\n|```/g, '').trim();
         const refinedMessages = JSON.parse(cleanedJsonString);
@@ -467,4 +470,46 @@ export const refineMessage = async (req, res) => {
         console.error('refineMessage error:', error);
         res.status(500).json({ error: 'Failed to refine the message', details: error.message });
     }
+};
+
+// Helper: try to generate using preferred model; on 404, list models and retry with a fallback
+const generateWithFallback = async (genAI, apiKey, preferredModel, prompt) => {
+  const tryGenerate = async (modelName) => {
+    const model = genAI.getGenerativeModel({ model: modelName });
+    return await model.generateContent(prompt);
+  };
+
+  try {
+    return await tryGenerate(preferredModel);
+  } catch (err) {
+    // If model not found for this API version, attempt to list available models and retry once
+    if (err && err.status === 404) {
+      try {
+        const listUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+        const resp = await axios.get(listUrl, { params: { key: apiKey } });
+        const models = resp.data && resp.data.models ? resp.data.models : resp.data;
+
+        // Pick a fallback model. Prefer models with 'gemini' in the name and that include any "generate" text in their metadata
+        let fallback;
+        if (Array.isArray(models)) {
+          fallback = models.find(m => (m.name || m.model || '').toLowerCase().includes('gemini')) || models[0];
+        } else if (models && typeof models === 'object') {
+          // sometimes the response shape differs
+          const arr = Object.values(models).flat();
+          fallback = arr.find(m => (m.name || m.model || '').toLowerCase().includes('gemini')) || arr[0];
+        }
+
+        const fallbackModelName = (fallback && (fallback.name || fallback.model)) || null;
+        if (!fallbackModelName) throw err; // nothing sensible to try
+
+        console.warn(`Preferred model '${preferredModel}' not available, retrying with fallback model '${fallbackModelName}'`);
+        return await tryGenerate(fallbackModelName);
+      } catch (listErr) {
+        // If listing or retrying fails, rethrow original error to be handled by caller
+        console.error('Error listing or trying fallback models:', listErr.message || listErr);
+        throw err;
+      }
+    }
+    throw err;
+  }
 };
